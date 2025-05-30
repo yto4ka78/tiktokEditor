@@ -1,0 +1,28 @@
+[project]
+name = "videoeditor"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Erik", email = "cros371@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pytube>=15.0.0",
+    "moviepy (==1.0.3)",
+    "yt-dlp",
+    "pillow>=10.0.0",
+    "customtkinter (>=5.2.2,<6.0.0)"
+]
+
+[tool.poetry]
+packages = [
+    { include = "videoeditor" }
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+videoeditor = "videoeditor.windows.index:main"
