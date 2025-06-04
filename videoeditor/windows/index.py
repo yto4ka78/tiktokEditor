@@ -5,7 +5,7 @@ from videoeditor.windows.variables import Styles
 def main():
     window = tk.Tk()
     window.title("Erik Video Editor")
-    window.geometry("800x340")
+    window.geometry("800x500")
     window.config(background=Styles.BACKGROUND)
 
     build_interface(window)

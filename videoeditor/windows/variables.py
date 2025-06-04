@@ -5,3 +5,4 @@ class Styles:
 
 class Variables:
     DEFAULT_FOLDER = "videoeditor/loops"
+    VIDEO_YOUTUBE_FOLDER = "videoeditor/videos"
