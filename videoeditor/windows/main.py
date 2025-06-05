@@ -75,7 +75,7 @@ def build_interface(window):
                 case "line":
                     prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path)
 
-            delete_video(output_path)
+            delete_video(video_path)
                     
             messagebox.showinfo("Готово", f"Видео сохранено в {output_path}")
             # cleanup_videos_folder(Variables.VIDEO_YOUTUBE_FOLDER)
