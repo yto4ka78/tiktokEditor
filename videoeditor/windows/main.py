@@ -73,8 +73,9 @@ def build_interface(window):
                 case "blur_bars":
                     prepare_and_merge_ffmpeg_blur_bars(video_path, output_path)
                 case "line":
-                    #print("❌ FFmpeg завершился с ошибкой:")
                     prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path)
+
+            delete_video(output_path)
                     
             messagebox.showinfo("Готово", f"Видео сохранено в {output_path}")
             # cleanup_videos_folder(Variables.VIDEO_YOUTUBE_FOLDER)

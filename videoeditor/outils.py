@@ -278,7 +278,15 @@ def prepare_and_merge_ffmpeg_blur_bars(main_path, output_path):
         print("❌ FFmpeg завершился с ошибкой:")
         print(e.stderr)
         raise e
-
+            # "[1:v]scale=1080:1920,boxblur=20:1[blurred_bg];"
+            # "color=white@1.0:s=1080x1920:r=30:d=15[white];"
+            # "[white]drawbox=x=0:y=960:w=1080:h=10:color=black@1.0:t=fill,"
+            # "rotate=0.785398:ow=rotw(0):oh=roth(0):c=white@1.0[mask_raw];"
+            # "[mask_raw]fps=30,trim=duration=14,setpts=PTS-STARTPTS[mask_trimmed];"
+            # "[0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[main];"
+            # "[mask_trimmed][main]scale2ref[mask_scaled][main2];"
+            # "[main2][mask_scaled]alphamerge[main_masked];"
+            # "[blurred_bg][main_masked]overlay=(W-w)/2:(H-h)/2,format=yuv420p[outv]"
 def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path):
     ffmpeg_command = [
         "ffmpeg",
@@ -291,7 +299,7 @@ def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path):
             "color=white@1.0:s=1080x1920:r=30:d=15[white];"
             "[white]drawbox=x=0:y=960:w=1080:h=10:color=black@1.0:t=fill,"
             "rotate=0.785398:ow=rotw(0):oh=roth(0):c=white@1.0[mask_raw];"
-            "[mask_raw]fps=30,trim=duration=14,setpts=PTS-STARTPTS[mask_trimmed];"
+            "[mask_raw]fps=30,setpts=PTS-STARTPTS[mask_trimmed];"
             "[0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[main];"
             "[mask_trimmed][main]scale2ref[mask_scaled][main2];"
             "[main2][mask_scaled]alphamerge[main_masked];"
@@ -316,7 +324,7 @@ def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path):
     ]
 
     try:
-        result = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+        result = subprocess.run(ffmpeg_command, check=True, text=True)
         print("✅ Видео успешно обработано!")
     except subprocess.CalledProcessError as e:
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
