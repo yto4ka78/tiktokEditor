@@ -317,18 +317,21 @@ def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, pa
         (
             f"""
             [1:v]scale=1080:1920,boxblur=20:1[blurred];
-            color=black:s=3000x3000:d=15[mask_base1];
-            [mask_base1]drawbox=x=0:y=1500:w=3000:h=10:color=white@1.0:t=fill,
-            rotate=-0.823599:ow=1080:oh=1920:c=black,
-            scale=1080:1920[mask1];
-            [0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[scaled];
+            [0:v]scale=iw*min(1080/iw\,1920/ih):ih*min(1080/iw\,1920/ih),setsar=1[scaled];
             [scaled]pad=1080:1920:(1080-in_w)/2:(1920-in_h)/2[main];
-            color=black:s=1080x1920:d=15[mask_base2];
-            [mask_base2]drawbox=x=0:y={padding_top}:w={h_mask}:h=760:color=white@1.0:t=fill[mask2];
-            [mask1][mask2]blend=all_mode=lighten[mask_combined];
-            [mask_combined]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];
-            [main][alpha_mask]alphamerge[main_with_alpha];
-            [blurred][main_with_alpha]overlay=0:0,format=yuv420p[outv]
+            color=black:s=3000x3000:d=5[mask_base1];
+            [mask_base1]drawbox=x=0:y=1500:w=3000:h=5:color=white@1.0:t=fill,
+            rotate=-1:ow=1080:oh=1920:c=black,
+            scale=1080:1920[mask1];
+            color=black:s=3000x3000:d=5[mask_base2];
+            [mask_base2]drawbox=x=0:y=2100:w=3000:h=5:color=white@1.0:t=fill,
+            rotate=-0.009:ow=1080:oh=1920:c=black,
+            scale=1080:1920[mask2];
+            [mask1][mask2]blend=all_mode=lighten[combined_mask];
+            [combined_mask]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];
+            [blurred][alpha_mask]alphamerge[main_with_alpha];
+            [main][main_with_alpha]overlay=0:0[with_alpha];
+            [with_alpha]format=yuv420p[outv]
             """
         ),
         "-map", "[outv]",
