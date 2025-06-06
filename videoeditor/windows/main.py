@@ -4,7 +4,7 @@ import customtkinter as ctk
 import os
 import time
 import random
-from videoeditor.outils import cleanup_videos_folder, download_video, delete_video, prepare_and_merge_ffmpeg_70_30, prepare_and_merge_ffmpeg_blur_bars, prepare_and_merge_ffmpeg_50_50, prepare_and_merge_ffmpeg_30_70, prepare_and_merge_ffmpeg_diagonal_mask
+from videoeditor.outils import cleanup_videos_folder, download_video, delete_video, prepare_and_merge_ffmpeg_70_30, prepare_and_merge_ffmpeg_blur_bars, prepare_and_merge_ffmpeg_50_50, prepare_and_merge_ffmpeg_30_70, handle_prepare_and_merge_ffmpeg_diagonal_mask
 from videoeditor.windows.variables import Styles, Variables
 
 
@@ -73,7 +73,7 @@ def build_interface(window):
                 case "blur_bars":
                     prepare_and_merge_ffmpeg_blur_bars(video_path, output_path)
                 case "line":
-                    prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path)
+                    handle_prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path)
 
             delete_video(video_path)
                     

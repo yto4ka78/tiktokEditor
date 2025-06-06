@@ -104,12 +104,13 @@ def get_padding_top(original_w, original_h, target_w=1080, target_h=1920):
     scale_factor = min(target_w / original_w, target_h / original_h)
     scaled_h = int(original_h * scale_factor)
     padding_top = int((target_h - scaled_h) / 2)
-    return padding_top
+    h_mask = target_h - padding_top
+    return padding_top, h_mask
 
 def handle_prepare_and_merge_ffmpeg_diagonal_mask (main_path, loop_path, output_path):
     w, h = get_video_dimensions(main_path)
-    padding_top = get_padding_top(w, h)
-    prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top)
+    padding_top, h_mask = get_padding_top(w, h)
+    prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask)
 
 def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path):
     target_width = 1080
@@ -305,16 +306,8 @@ def prepare_and_merge_ffmpeg_blur_bars(main_path, output_path):
         print("❌ FFmpeg завершился с ошибкой:")
         print(e.stderr)
         raise e
-            # "[1:v]scale=1080:1920,boxblur=20:1[blurred_bg];"
-            # "color=white@1.0:s=1080x1920:r=30:d=15[white];"
-            # "[white]drawbox=x=0:y=960:w=1080:h=10:color=black@1.0:t=fill,"
-            # "rotate=0.785398:ow=rotw(0):oh=roth(0):c=white@1.0[mask_raw];"
-            # "[mask_raw]fps=30,trim=duration=14,setpts=PTS-STARTPTS[mask_trimmed];"
-            # "[0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[main];"
-            # "[mask_trimmed][main]scale2ref[mask_scaled][main2];"
-            # "[main2][mask_scaled]alphamerge[main_masked];"
-            # "[blurred_bg][main_masked]overlay=(W-w)/2:(H-h)/2,format=yuv420p[outv]"
-def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top):
+
+def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask):
     ffmpeg_command = [
         "ffmpeg",
         "-i", main_path,
@@ -322,39 +315,78 @@ def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, pa
         "-i", loop_path,
         "-filter_complex",
         (
-            # Шаг 1: задний фон (размытие)
-            "[1:v]scale=1080:1920,boxblur=20:1[blurred];"
+            f"""
+            [1:v]scale=1080:1920,boxblur=20:1[blurred];
+            color=black:s=3000x3000:d=15[mask_base1];
+            [mask_base1]drawbox=x=0:y=1500:w=3000:h=10:color=white@1.0:t=fill,
+            rotate=-0.823599:ow=1080:oh=1920:c=black,
+            scale=1080:1920[mask1];
+            [0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[scaled];
+            [scaled]pad=1080:1920:(1080-in_w)/2:(1920-in_h)/2[main];
+            color=black:s=1080x1920:d=15[mask_base2];
+            [mask_base2]drawbox=x=0:y={padding_top}:w={h_mask}:h=760:color=white@1.0:t=fill[mask2];
+            [mask1][mask2]blend=all_mode=lighten[mask_combined];
+            [mask_combined]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];
+            [main][alpha_mask]alphamerge[main_with_alpha];
+            [blurred][main_with_alpha]overlay=0:0,format=yuv420p[outv]
+            """
+        ),
+        "-map", "[outv]",
+        "-map", "0:a?",
+        "-c:v", "libx264",
+        "-c:a", "aac",
+        "-b:v", "3500k",
+        "-r", "30",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-profile:v", "high",
+        "-level", "4.0",
+        "-movflags", "+faststart",
+        "-threads", "4",  # Ограничиваем количество потоков
+        "-max_muxing_queue_size", "1024",  # Увеличиваем размер очереди мультиплексирования
+        "-max_interleave_delta", "0",  # Отключаем интерливинг
+        "-shortest",
+        output_path
+    ]
 
-            # Шаг 2: диагональная маска
-            "color=black:s=3000x3000:d=15[mask_base1];"
-            "[mask_base1]drawbox=x=0:y=1500:w=3000:h=10:color=white@1.0:t=fill,"
-            "rotate=-0.523599:ow=1080:oh=1920:c=black,"
-            "scale=1080:1920[mask1];"
+    try:
+        result = subprocess.run(ffmpeg_command, check=True, text=True)
+        print("✅ Видео успешно обработано!")
+    except subprocess.CalledProcessError as e:
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            print("⚠️ FFmpeg завершился с ошибкой, но файл создан успешно.")
+            print("Ошибка FFmpeg:\n", e.stderr)
+            return  # или return output_path, если нужно вернуть путь
+        else:
+            print("❌ FFmpeg завершился с ошибкой и файл не создан.")
+            print(e.stderr)
+            raise e
 
-            # Шаг 3: масштабирование основного видео и паддинг до 1080x1920
-            "[0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[scaled];"
-            "[scaled]pad=1080:1920:(1080-in_w)/2:(1920-in_h)/2[main];"
-
-            # Шаг 4: маска верхней горизонтальной полосы (там где сверху чёрный фон)
-            "color=black:s=1080x1920:d=15[mask_base2];"
-            "[mask_base2]drawbox=x=0:y={}:w=1080:h=760:color=white@1.0:t=fill[mask2];"
-
-            # "[mask_base2]drawbox=x=0:y=(1920-in_h)/2-30:w=1080:h=30:color=white@1.0:t=fill[mask2];"
-
-            # Шаг 5: объединение двух масок
-            "[mask1][mask2]blend=all_mode=lighten[mask_combined];"
-
-            # Шаг 6: финальная альфа-маска
-            "[mask_combined]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];"
-
-            #ТЕСТ
-            #"[main][alpha_mask]overlay=0:0[outv]"
-
-            # Шаг 7: применяем альфу к фону
-            "[blurred][alpha_mask]alphamerge[blurred_masked];"
-
-            # Шаг 8: финальное наложение основного видео поверх masked-фона
-            "[main][blurred_masked]overlay=0:0,format=yuv420p[outv]"
+    #Это аналогичная функция дающая эффект blur_bars, но в которую
+    # Можно добавить заднее видео на свой вкус.
+def prepare_and_merge_ffmpeg_blur_bars_v2(main_path, loop_path, output_path, padding_top, h_mask):
+    ffmpeg_command = [
+        "ffmpeg",
+        "-i", main_path,
+        "-stream_loop", "-1",
+        "-i", loop_path,
+        "-filter_complex",
+        (
+            f"""
+            [1:v]scale=1080:1920,boxblur=20:1[blurred];
+            color=black:s=3000x3000:d=15[mask_base1];
+            [mask_base1]drawbox=x=0:y=1500:w=3000:h=10:color=white@1.0:t=fill,
+            rotate=-0.523599:ow=1080:oh=1920:c=black,
+            scale=1080:1920[mask1];
+            [0:v]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[scaled];
+            [scaled]pad=1080:1920:(1080-in_w)/2:(1920-in_h)/2[main];
+            color=black:s=1080x1920:d=15[mask_base2];
+            [mask_base2]drawbox=x=0:y={padding_top}:w={h_mask}:h=760:color=white@1.0:t=fill[mask2];
+            [mask1][mask2]blend=all_mode=lighten[mask_combined];
+            [mask_combined]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];
+            [main][alpha_mask]alphamerge[main_with_alpha];
+            [blurred][main_with_alpha]overlay=0:0,format=yuv420p[outv]
+            """
         ),
         "-map", "[outv]",
         "-map", "0:a?",
