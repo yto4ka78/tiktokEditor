@@ -7,6 +7,8 @@ import os
 import time
 import subprocess
 import json
+import threading
+
 
 def download_video(url, output_path):
 
@@ -79,7 +81,7 @@ def delete_video(path):
     try:
         if os.path.exists(path):
             os.remove(path)
-            print(f"Файл {path} успешно удален")
+            print(f"✅ Файл {path} успешно удален")
     except Exception as e:
         print(f"Ошибка при удалении файла {path}: {e}")
 
@@ -107,28 +109,18 @@ def get_padding_top(original_w, original_h, target_w=1080, target_h=1920):
     h_mask = target_h - padding_top
     return padding_top, h_mask
 
-def handle_prepare_and_merge_ffmpeg_diagonal_mask (main_path, loop_path, output_path):
+def handle_prepare_and_merge_ffmpeg_diagonal_mask (main_path, loop_path, output_path, on_update):
     w, h = get_video_dimensions(main_path)
     padding_top, h_mask = get_padding_top(w, h)
-    prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask)
+    prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask, on_update)
+
+
 
 def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path):
     target_width = 1080
     target_full_height = 1920
-    target_top_height = int(target_full_height * 0.7)  # 70% от полной высоты (1344)
-    target_bottom_height = target_full_height - target_top_height  # 30% от полной высоты (576)
-    # Команда FFmpeg для масштабирования, обрезки/добавления полей и объединения
-    # Фильтр complex_filter объяснение:
-    # [0:v] - берем видео поток из первого входного файла (main_path)
-    # scale=-2:1344 - масштабируем высоту до 1344, ширину авто (-2 гарантирует четность)
-    # crop=1080:1344 - обрезаем до 1080x1344
-    # setsar=1 - устанавливаем соотношение сторон пикселей 1:1
-    # [top] - назначаем результат первому выходу фильтра (верхний клип)
-    # [1:v] - берем видео поток из второго входного файла (loop_path)
-    # scale=1080:-2, crop=1080:576, setsar=1 - то же самое для нижнего клипа
-    # [bottom] - назначаем результат второму выходу фильтра (нижний клип)
-    # [top][bottom]vstack - вертикально объединяем верхний и нижний клипы
-    # [outv] - назначаем результат объединения на выходной видео поток
+    target_top_height = int(target_full_height * 0.7)
+    target_bottom_height = target_full_height - target_top_height  
     ffmpeg_command = [
         "ffmpeg",
         "-i", main_path,
@@ -307,7 +299,7 @@ def prepare_and_merge_ffmpeg_blur_bars(main_path, output_path):
         print(e.stderr)
         raise e
 
-def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask):
+def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask, on_update=None):
     ffmpeg_command = [
         "ffmpeg",
         "-i", main_path,
@@ -352,9 +344,23 @@ def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, pa
         output_path
     ]
 
+    if on_update:
+        on_update("⏳ Обработка запущена...")
+
     try:
-        result = subprocess.run(ffmpeg_command, check=True, text=True)
-        print("✅ Видео успешно обработано!")
+        process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+
+        for line in process.stdout:
+            line = line.strip()
+            if on_update:
+                on_update(line)
+            print(line)
+
+        process.wait()
+
+        if on_update:
+            on_update("✅ Видео успешно обработано!")
+
     except subprocess.CalledProcessError as e:
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             print("⚠️ FFmpeg завершился с ошибкой, но файл создан успешно.")

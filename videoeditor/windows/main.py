@@ -4,6 +4,7 @@ import customtkinter as ctk
 import os
 import time
 import random
+import threading
 from videoeditor.outils import cleanup_videos_folder, download_video, delete_video, prepare_and_merge_ffmpeg_70_30, prepare_and_merge_ffmpeg_blur_bars, prepare_and_merge_ffmpeg_50_50, prepare_and_merge_ffmpeg_30_70, handle_prepare_and_merge_ffmpeg_diagonal_mask
 from videoeditor.windows.variables import Styles, Variables
 
@@ -44,45 +45,51 @@ def build_interface(window):
             directory_entry.insert(0, directory)
 
     def start():
-        url = url_entry.get()
-        loop = loop_entry.get()
-        directoryToExport = directory_entry.get()
-        
-        if not url:
-            messagebox.showerror("Ошибка", "Введите ссылку на видео")
-            return
+        def update_processing_info(text, frame):
+            def update():
+                for widget in frame.winfo_children():
+                    widget.destroy()
+                tk.Label(frame, text=text, bg=Styles.BACKGROUND, fg=Styles.COLOR_TEXT, anchor="w", justify="left").pack(fill="both", expand=True)
+            frame.after(0, update)
+
+        def run_processing():
+            url = url_entry.get()
+            loop = loop_entry.get()
+            directoryToExport = directory_entry.get()
             
-        if selected.get() != "blur_bars" and not loop:
-            messagebox.showerror("Ошибка", "Выберите комбинируемое видео")
-            return
-            
-        if not directoryToExport:
-            messagebox.showerror("Ошибка", "Выберите папку для сохранения")
-            return
-            
-        try:
+            if not url:
+                messagebox.showerror("Ошибка", "Введите ссылку на видео")
+                return
+                
+            if selected.get() != "blur_bars" and not loop:
+                messagebox.showerror("Ошибка", "Выберите комбинируемое видео")
+                return
+                
+            if not directoryToExport:
+                messagebox.showerror("Ошибка", "Выберите папку для сохранения")
+                return
+
             video_path = download_video(url, "videos")
             output_path = os.path.join(directoryToExport, "output.mp4")
-            match selected.get():
-                case "70_30":
-                    prepare_and_merge_ffmpeg_70_30(video_path, loop, output_path)
-                case "50_50":
-                    prepare_and_merge_ffmpeg_50_50(video_path, loop, output_path)
-                case "30_70":
-                    prepare_and_merge_ffmpeg_30_70(video_path, loop, output_path)
-                case "blur_bars":
-                    prepare_and_merge_ffmpeg_blur_bars(video_path, output_path)
-                case "line":
-                    handle_prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path)
-
-            delete_video(video_path)
+            
+            try:
+                match selected.get():
+                    case "70_30":
+                        prepare_and_merge_ffmpeg_70_30(video_path, loop, output_path)
+                    case "50_50":
+                        prepare_and_merge_ffmpeg_50_50(video_path, loop, output_path)
+                    case "30_70":
+                        prepare_and_merge_ffmpeg_30_70(video_path, loop, output_path)
+                    case "blur_bars":
+                        prepare_and_merge_ffmpeg_blur_bars(video_path, output_path)
+                    case "line":
+                        handle_prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
                     
-            messagebox.showinfo("Готово", f"Видео сохранено в {output_path}")
-            # cleanup_videos_folder(Variables.VIDEO_YOUTUBE_FOLDER)
-            # delete_video(video_path)
-                    
-        except Exception as e:
-            messagebox.showerror("Ошибка", str(e))
+                delete_video(video_path)
+                messagebox.showinfo("Готово", f"Видео сохранено в {output_path}")
+            except Exception as e:
+                messagebox.showerror("Ошибка", str(e))
+        threading.Thread(target=run_processing).start()          
 
 
 
@@ -255,6 +262,9 @@ def build_interface(window):
     except Exception as e:
         print(f"Ошибка загрузки изображения: {e}")
 
+
+    info_of_processing_process = tk.Frame(frame, bg=Styles.BACKGROUND)
+    info_of_processing_process.pack(fill="both", expand=True)
     
     submit_button = ctk.CTkButton(frame, text="Смонтировать", command=start, height=40, fg_color=Styles.COLOR_BUTTON)
     submit_button.pack(pady=10)
