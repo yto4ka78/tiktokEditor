@@ -10,59 +10,86 @@ import json
 import threading
 
 
-def download_video(url, output_path):
-
+def download_video(url, output_path, on_update=None):
     cleanup_videos_folder(output_path)
 
-    video_path = os.path.join(output_path, "video.mp4")
-    audio_path = os.path.join(output_path, "с")
-    final_output = os.path.join(output_path, "merged.mp4")
+    output_file = os.path.join(output_path, "video.mp4")
 
-    # 1. Скачиваем видео
-    ydl_video_opts = {
-        'outtmpl': video_path,
-        'format': '136',
+    ydl_opts = {
+        'outtmpl': output_file,
+        'format': 'bestvideo[height<=1080]+bestaudio/best',
+        'merge_output_format': 'mp4',
         'overwrites': True,
-        'restrictfilenames': True
-    }
-
-    # 2. Скачиваем аудио
-    ydl_audio_opts = {
-        'outtmpl': audio_path,
-        'format': '140',
-        'overwrites': True,
-        'restrictfilenames': True
+        'restrictfilenames': True,
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_video_opts) as ydl:
+        if on_update: on_update("⏬ Скачивание видео...")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-        with yt_dlp.YoutubeDL(ydl_audio_opts) as ydl:
-            ydl.download([url])
+        if on_update:
+            on_update("✅ Видео успешно скачано!")
+        return output_file
     except Exception as e:
-        print(f"❌ Ошибка при скачивании: {e}")
+        if on_update:
+            on_update(f"❌ Ошибка при скачивании: {e}")
         raise e
+# def download_video(url, output_path, on_update=None):
 
-    # 3. Объединяем через ffmpeg
-    try:
-        subprocess.run([
-            "ffmpeg",
-            "-y",  # перезапись без подтверждения
-            "-i", video_path,
-            "-i", audio_path,
-            "-c:v", "copy",
-            "-c:a", "aac",
-            "-shortest",
-            final_output
-        ], check=True)
+#     cleanup_videos_folder(output_path)
 
-        os.remove(video_path)
-        os.remove(audio_path)
-        print(f"✅ Объединено в: {final_output}")
-        return final_output
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Ошибка ffmpeg при объединении: {e}")
-        raise e
+#     video_path = os.path.join(output_path, "video.mp4")
+#     audio_path = os.path.join(output_path, "c")
+#     final_output = os.path.join(output_path, "merged.mp4")
+
+#     # 1. Скачиваем видео
+#     ydl_video_opts = {
+#         'outtmpl': video_path,
+#         'format': 'bestvideo[height<=1080]',
+#         'overwrites': True,
+#         'restrictfilenames': True
+#     }
+
+#     # 2. Скачиваем аудио
+#     ydl_audio_opts = {
+#         'outtmpl': audio_path,
+#         'format': '140',
+#         'overwrites': True,
+#         'restrictfilenames': True
+#     }
+
+#     try:
+#         if on_update: on_update("⏬ Скачивание видео...")
+#         with yt_dlp.YoutubeDL(ydl_video_opts) as ydl:
+#             ydl.download([url])
+#         if on_update: on_update("🎵 Скачивание аудио...")
+#         with yt_dlp.YoutubeDL(ydl_audio_opts) as ydl:
+#             ydl.download([url])
+#     except Exception as e:
+#         if on_update: on_update(f"❌ Ошибка при скачивании: {e}")
+#         print(f"❌ Ошибка при скачивании: {e}")
+#         raise e
+
+#     # 3. Объединяем через ffmpeg
+#     try:
+#         subprocess.run([
+#             "ffmpeg",
+#             "-y",  # перезапись без подтверждения
+#             "-i", video_path,
+#             "-i", audio_path,
+#             "-c:v", "copy",
+#             "-c:a", "aac",
+#             "-shortest",
+#             final_output
+#         ], check=True)
+
+#         os.remove(video_path)
+#         os.remove(audio_path)
+#         print(f"✅ Объединено в: {final_output}")
+#         return final_output
+#     except subprocess.CalledProcessError as e:
+#         print(f"❌ Ошибка ffmpeg при объединении: {e}")
+#         raise e
 
 
 def cleanup_videos_folder(folder_path="videos"):
@@ -114,9 +141,22 @@ def handle_prepare_and_merge_ffmpeg_diagonal_mask (main_path, loop_path, output_
     padding_top, h_mask = get_padding_top(w, h)
     prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask, on_update)
 
+def handle_prepare_and_merge_ffmpeg_your_blur_bars (main_path, loop_path, output_path, on_update):
+    w, h = get_video_dimensions(main_path)
+    padding_top, h_mask = get_padding_top(w, h)
+    prepare_and_merge_ffmpeg_your_blur_bars(main_path, loop_path, output_path, padding_top, h_mask, on_update)
 
+def show_render_logs (process, on_update):
+    for line in process.stdout:
+        line = line.strip()
+        if on_update:
+            on_update(line)
 
-def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path):
+    process.wait()
+    if on_update:
+        on_update("✅ Видео успешно обработано!")
+
+def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path, on_update=None):
     target_width = 1080
     target_full_height = 1920
     target_top_height = int(target_full_height * 0.7)
@@ -130,15 +170,15 @@ def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path):
         f"[0:v]scale=-2:{target_top_height},crop={target_width}:{target_top_height}:x=(iw-{target_width})/2:y=(ih-{target_top_height})/2,setsar=1[top];"
         f"[1:v]scale={target_width}:-2,crop={target_width}:{target_bottom_height}:x=(iw-{target_width})/2:y=(ih-{target_bottom_height})/2,setsar=1[bottom];"
         f"[top][bottom]vstack,format=yuv420p[outv]",
-        "-map", "[outv]", # Используем обработанный видео поток
-        "-map", "0:a?", # Используем аудио поток из первого файла (если есть, '?' делает его необязательным)
+        "-map", "[outv]", 
+        "-map", "0:a?", 
         "-c:v", "libx264",
         "-c:a", "aac",
-        "-b:v", "3000k", # Битрейт видео
-        "-r", "30", # FPS
-        "-preset", "veryfast", # Пресет скорости
+        "-b:v", "3000k", 
+        "-r", "30", 
+        "-preset", "veryfast", 
         "-threads", "8",
-        "-crf", "25", # Качество
+        "-crf", "25",
         "-profile:v", "main",
         "-level", "4.0",
         "-movflags", "+faststart",
@@ -156,10 +196,8 @@ def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path):
     print(" ".join(ffmpeg_command))
     
     try:
-        result = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
-        print("FFmpeg stdout:", result.stdout)
-        print("FFmpeg stderr:", result.stderr)
-        print("FFmpeg завершен успешно")
+        process = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+        show_render_logs(process, on_update)
     except subprocess.CalledProcessError as e:
         print(f"Ошибка выполнения FFmpeg:\n{e.stderr}")
         raise e
@@ -167,7 +205,7 @@ def prepare_and_merge_ffmpeg_70_30(main_path, loop_path, output_path):
         print("Ошибка: FFmpeg не найден. Убедитесь, что FFmpeg установлен и доступен в PATH.")
         raise FileNotFoundError("FFmpeg не найден")
 
-def prepare_and_merge_ffmpeg_50_50(main_path, loop_path, output_path):
+def prepare_and_merge_ffmpeg_50_50(main_path, loop_path, output_path, on_update=None):
     target_width = 1080
     target_full_height = 1920
     target_half_height = target_full_height // 2  # 50% от полной высоты (960)
@@ -204,18 +242,15 @@ def prepare_and_merge_ffmpeg_50_50(main_path, loop_path, output_path):
     ]
 
     try:
-        result = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
-        print("FFmpeg stdout:", result.stdout)
-        print("FFmpeg stderr:", result.stderr)
-        print("FFmpeg завершен успешно")
+        process = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+        show_render_logs(process, on_update)
     except subprocess.CalledProcessError as e:
         print(f"Ошибка выполнения FFmpeg:\n{e.stderr}")
+        if on_update:
+            on_update("❌ Ошибка монтажа, но видео смонтировано!")
         raise e
-    except FileNotFoundError:
-        print("Ошибка: FFmpeg не найден. Убедитесь, что FFmpeg установлен и доступен в PATH.")
-        raise FileNotFoundError("FFmpeg не найден")
 
-def prepare_and_merge_ffmpeg_30_70(main_path, loop_path, output_path):
+def prepare_and_merge_ffmpeg_30_70(main_path, loop_path, output_path, on_update=None):
     target_width = 1080
     target_full_height = 1920
     target_top_height = int(target_full_height * 0.3)  # 30% от полной высоты (576)
@@ -253,18 +288,14 @@ def prepare_and_merge_ffmpeg_30_70(main_path, loop_path, output_path):
     ]
 
     try:
-        result = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
-        print("FFmpeg stdout:", result.stdout)
-        print("FFmpeg stderr:", result.stderr)
-        print("FFmpeg завершен успешно")
+        process = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
+        show_render_logs(process, on_update)
     except subprocess.CalledProcessError as e:
-        print(f"Ошибка выполнения FFmpeg:\n{e.stderr}")
+        if on_update:
+            on_update("❌ Ошибка монтажа, но видео смонтировано!")
         raise e
-    except FileNotFoundError:
-        print("Ошибка: FFmpeg не найден. Убедитесь, что FFmpeg установлен и доступен в PATH.")
-        raise FileNotFoundError("FFmpeg не найден")
 
-def prepare_and_merge_ffmpeg_blur_bars(main_path, output_path):
+def prepare_and_merge_ffmpeg_youTube_blur_bars(main_path, output_path, on_update=None):
     ffmpeg_command = [
         "ffmpeg",
         "-i", main_path,
@@ -272,8 +303,8 @@ def prepare_and_merge_ffmpeg_blur_bars(main_path, output_path):
         (
             "[0:v]split=2[bg][fg];"
             "[bg]scale=1080:1920,boxblur=20:1[blurred];"
-            "[fg]scale=iw*min(1080/iw\\,1920/ih):ih*min(1080/iw\\,1920/ih),setsar=1[main];"
-            "[blurred][main]overlay=(W-w)/2:(H-h)/2,format=yuv420p[outv]"
+            "[fg]scale=-1:ih*min(1080/iw\\,1920/ih),setsar=1[main];"
+            "[blurred][main]overlay=(W-w)/2:(H-h)/2:format=auto[outv]"
         ),
         "-map", "[outv]",
         "-map", "0:a?",
@@ -291,89 +322,17 @@ def prepare_and_merge_ffmpeg_blur_bars(main_path, output_path):
     ]
 
     try:
-        result = subprocess.run(ffmpeg_command, check=True, capture_output=True, text=True)
-        print("✅ Видео успешно обработано!")
-        print("FFmpeg stdout:\n", result.stdout)
+        process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        show_render_logs(process, on_update)
+
     except subprocess.CalledProcessError as e:
+        if on_update:
+            on_update("❌ Ошибка монтажа, но видео смонтировано!")
         print("❌ FFmpeg завершился с ошибкой:")
         print(e.stderr)
         raise e
 
-def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask, on_update=None):
-    ffmpeg_command = [
-        "ffmpeg",
-        "-i", main_path,
-        "-stream_loop", "-1",
-        "-i", loop_path,
-        "-filter_complex",
-        (
-            f"""
-            [1:v]scale=1080:1920,boxblur=20:1[blurred];
-            [0:v]scale=iw*min(1080/iw\,1920/ih):ih*min(1080/iw\,1920/ih),setsar=1[scaled];
-            [scaled]pad=1080:1920:(1080-in_w)/2:(1920-in_h)/2[main];
-            color=black:s=3000x3000:d=5[mask_base1];
-            [mask_base1]drawbox=x=0:y=1500:w=3000:h=5:color=white@1.0:t=fill,
-            rotate=-1:ow=1080:oh=1920:c=black,
-            scale=1080:1920[mask1];
-            color=black:s=3000x3000:d=5[mask_base2];
-            [mask_base2]drawbox=x=0:y=2100:w=3000:h=5:color=white@1.0:t=fill,
-            rotate=-0.009:ow=1080:oh=1920:c=black,
-            scale=1080:1920[mask2];
-            [mask1][mask2]blend=all_mode=lighten[combined_mask];
-            [combined_mask]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];
-            [blurred][alpha_mask]alphamerge[main_with_alpha];
-            [main][main_with_alpha]overlay=0:0[with_alpha];
-            [with_alpha]format=yuv420p[outv]
-            """
-        ),
-        "-map", "[outv]",
-        "-map", "0:a?",
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-b:v", "3500k",
-        "-r", "30",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-profile:v", "high",
-        "-level", "4.0",
-        "-movflags", "+faststart",
-        "-threads", "4",  # Ограничиваем количество потоков
-        "-max_muxing_queue_size", "1024",  # Увеличиваем размер очереди мультиплексирования
-        "-max_interleave_delta", "0",  # Отключаем интерливинг
-        "-shortest",
-        output_path
-    ]
-
-    if on_update:
-        on_update("⏳ Обработка запущена...")
-
-    try:
-        process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-
-        for line in process.stdout:
-            line = line.strip()
-            if on_update:
-                on_update(line)
-            print(line)
-
-        process.wait()
-
-        if on_update:
-            on_update("✅ Видео успешно обработано!")
-
-    except subprocess.CalledProcessError as e:
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-            print("⚠️ FFmpeg завершился с ошибкой, но файл создан успешно.")
-            print("Ошибка FFmpeg:\n", e.stderr)
-            return  # или return output_path, если нужно вернуть путь
-        else:
-            print("❌ FFmpeg завершился с ошибкой и файл не создан.")
-            print(e.stderr)
-            raise e
-
-    #Это аналогичная функция дающая эффект blur_bars, но в которую
-    # Можно добавить заднее видео на свой вкус.
-def prepare_and_merge_ffmpeg_blur_bars_v2(main_path, loop_path, output_path, padding_top, h_mask):
+def prepare_and_merge_ffmpeg_your_blur_bars(main_path, loop_path, output_path, padding_top, h_mask, on_update=None):
     ffmpeg_command = [
         "ffmpeg",
         "-i", main_path,
@@ -416,14 +375,77 @@ def prepare_and_merge_ffmpeg_blur_bars_v2(main_path, loop_path, output_path, pad
     ]
 
     try:
-        result = subprocess.run(ffmpeg_command, check=True, text=True)
-        print("✅ Видео успешно обработано!")
+        process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        show_render_logs(process, on_update)
     except subprocess.CalledProcessError as e:
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             print("⚠️ FFmpeg завершился с ошибкой, но файл создан успешно.")
             print("Ошибка FFmpeg:\n", e.stderr)
             return  # или return output_path, если нужно вернуть путь
         else:
+            print("❌ FFmpeg завершился с ошибкой и файл не создан.")
+            print(e.stderr)
+            raise e
+
+def prepare_and_merge_ffmpeg_diagonal_mask(main_path, loop_path, output_path, padding_top, h_mask, on_update=None):
+    ffmpeg_command = [
+        "ffmpeg",
+        "-i", main_path,
+        "-stream_loop", "-1",
+        "-i", loop_path,
+        "-filter_complex",
+        (
+            f"""
+            [1:v]scale=1080:1920,boxblur=20:1[blurred];
+            [0:v]scale=iw*min(1080/iw\,1920/ih):ih*min(1080/iw\,1920/ih),setsar=1[scaled];
+            [scaled]pad=1080:1920:(1080-in_w)/2:(1920-in_h)/2[main];
+            color=black:s=3000x3000:d=5[mask_base1];
+            [mask_base1]drawbox=x=0:y=1500:w=3000:h=5:color=white@1.0:t=fill,
+            rotate=-1:ow=1080:oh=1920:c=black,
+            scale=1080:1920[mask1];
+            color=black:s=3000x3000:d=5[mask_base2];
+            [mask_base2]drawbox=x=0:y=2100:w=3000:h=5:color=white@1.0:t=fill,
+            rotate=-0.009:ow=1080:oh=1920:c=black,
+            scale=1080:1920[mask2];
+            [mask1][mask2]blend=all_mode=lighten[combined_mask];
+            [combined_mask]fps=30,setpts=PTS-STARTPTS,format=gray[alpha_mask];
+            [blurred][alpha_mask]alphamerge[main_with_alpha];
+            [main][main_with_alpha]overlay=0:0[with_alpha];
+            [with_alpha]format=yuv420p[outv]
+            """
+        ),
+        "-map", "[outv]",
+        "-map", "0:a?",
+        "-c:v", "libx264",
+        "-c:a", "aac",
+        "-b:v", "3500k",
+        "-r", "30",
+        "-preset", "veryfast",
+        "-crf", "23",
+        "-profile:v", "high",
+        "-level", "4.0",
+        "-movflags", "+faststart",
+        "-threads", "4", 
+        "-max_muxing_queue_size", "1024",
+        "-max_interleave_delta", "0",
+        "-shortest",
+        output_path
+    ]
+
+    try:
+        process = subprocess.Popen(ffmpeg_command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        show_render_logs(process, on_update)
+
+    except subprocess.CalledProcessError as e:
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            if on_update:
+                on_update("❌ Ошибка монтажа, но видео смонтировано!")
+            print("⚠️ FFmpeg завершился с ошибкой, но файл создан успешно.")
+            print("Ошибка FFmpeg:\n", e.stderr)
+            return  # или return output_path, если нужно вернуть путь
+        else:
+            if on_update:
+                on_update("❌ Ошибка монтажа")
             print("❌ FFmpeg завершился с ошибкой и файл не создан.")
             print(e.stderr)
             raise e

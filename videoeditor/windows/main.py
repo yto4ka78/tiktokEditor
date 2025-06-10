@@ -2,20 +2,25 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, LEFT, Listbox, Scrollbar, END, PhotoImage
 import customtkinter as ctk
 import os
+import json
 import time
 import random
 import threading
-from videoeditor.outils import cleanup_videos_folder, download_video, delete_video, prepare_and_merge_ffmpeg_70_30, prepare_and_merge_ffmpeg_blur_bars, prepare_and_merge_ffmpeg_50_50, prepare_and_merge_ffmpeg_30_70, handle_prepare_and_merge_ffmpeg_diagonal_mask
-from videoeditor.windows.variables import Styles, Variables
+from videoeditor.middleware import checkName, load_last_outh_path, save_outh_video_path, save_loop_video_path, load_last_loop_path
+from videoeditor.outils import cleanup_videos_folder, download_video, delete_video, prepare_and_merge_ffmpeg_70_30, prepare_and_merge_ffmpeg_youTube_blur_bars, prepare_and_merge_ffmpeg_50_50, prepare_and_merge_ffmpeg_30_70, handle_prepare_and_merge_ffmpeg_diagonal_mask, prepare_and_merge_ffmpeg_your_blur_bars, handle_prepare_and_merge_ffmpeg_your_blur_bars
+from videoeditor.variables import Styles, Variables
 
 
 def build_interface(window):
     def select_video():
+        last_path = load_last_loop_path()
+        initial_dir = os.path.dirname(last_path) if last_path else os.path.expanduser("~")
+        
         choice = messagebox.askyesno("Выбор", "Вы хотите выбрать папку с видео?")
         if choice:
             directory = filedialog.askdirectory(
                 title="Выберите папку с видео",
-                initialdir=os.path.expanduser("~")
+                initialdir=initial_dir
             )
             if directory:
                 video_files = [f for f in os.listdir(directory) if f.lower().endswith(('.mp4', '.avi', '.mov', '.mkv'))]
@@ -24,25 +29,32 @@ def build_interface(window):
                     full_path = os.path.join(directory, random_video)
                     loop_entry.delete(0, END)
                     loop_entry.insert(0, full_path)
+                    save_loop_video_path(full_path)
                 else:
                     messagebox.showerror("Ошибка", "В выбранной папке нет видео файлов")
         else:
             file_path = filedialog.askopenfilename(
                 title="Выберите видео",
-                filetypes=[("Видео файлы", "*.mp4 *.avi *.mov *.mkv"), ("Все файлы", "*.*")]
+                filetypes=[("Видео файлы", "*.mp4 *.avi *.mov *.mkv"), ("Все файлы", "*.*")],
+                initialdir=initial_dir
             )
             if file_path:
                 loop_entry.delete(0, END)
                 loop_entry.insert(0, file_path)
+                save_loop_video_path(file_path)
 
     def select_directory_for_video():
+        last_path = load_last_outh_path()
+        initial_dir = os.path.dirname(last_path) if last_path else os.path.expanduser("~")
+        
         directory = filedialog.askdirectory(
             title="Выберите папку для сохранения",
-            initialdir=os.path.expanduser("~")  # Начинаем с домашней директории
+            initialdir=initial_dir
         )
         if directory:
             directory_entry.delete(0, END)
             directory_entry.insert(0, directory)
+            save_outh_video_path(directory)
 
     def start():
         def update_processing_info(text, frame):
@@ -69,19 +81,21 @@ def build_interface(window):
                 messagebox.showerror("Ошибка", "Выберите папку для сохранения")
                 return
 
-            video_path = download_video(url, "videos")
-            output_path = os.path.join(directoryToExport, "output.mp4")
-            
+            video_path = download_video(url, "videos", on_update=lambda text: update_processing_info(text, info_of_processing_process))
+            output_path = checkName(directoryToExport)
+            #output_path = os.path.join(directoryToExport, "output.mp4")
             try:
                 match selected.get():
                     case "70_30":
-                        prepare_and_merge_ffmpeg_70_30(video_path, loop, output_path)
+                        prepare_and_merge_ffmpeg_70_30(video_path, loop, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
                     case "50_50":
-                        prepare_and_merge_ffmpeg_50_50(video_path, loop, output_path)
+                        prepare_and_merge_ffmpeg_50_50(video_path, loop, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
                     case "30_70":
-                        prepare_and_merge_ffmpeg_30_70(video_path, loop, output_path)
-                    case "blur_bars":
-                        prepare_and_merge_ffmpeg_blur_bars(video_path, output_path)
+                        prepare_and_merge_ffmpeg_30_70(video_path, loop, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
+                    case "your_blur_bars":
+                        handle_prepare_and_merge_ffmpeg_your_blur_bars(video_path, loop, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
+                    case "youTube_blur_bars":
+                        prepare_and_merge_ffmpeg_youTube_blur_bars(video_path, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
                     case "line":
                         handle_prepare_and_merge_ffmpeg_diagonal_mask(video_path, loop, output_path, on_update=lambda text: update_processing_info(text, info_of_processing_process))
                     
@@ -111,6 +125,11 @@ def build_interface(window):
     loop_entry = ctk.CTkEntry(file_frame, width=600, height=40, corner_radius=10)
     loop_entry.pack(side='left', padx=(0, 10), fill='x', expand=True)
     
+    # Загружаем последний использованный путь к loop видео
+    last_loop = load_last_loop_path()
+    if last_loop:
+        loop_entry.insert(0, last_loop)
+    
     select_button = ctk.CTkButton(file_frame, text="Выбрать видео", command=select_video, height=40, fg_color=Styles.COLOR_BUTTON)
     select_button.pack(side='left')
 
@@ -122,6 +141,11 @@ def build_interface(window):
     
     directory_entry = ctk.CTkEntry(directory_frame, width=600, height=40, corner_radius=10)
     directory_entry.pack(side='left', padx=(0, 10), fill='x', expand=True)
+    
+    # Загружаем последнюю использованную директорию
+    last_directory = load_last_outh_path()
+    if last_directory:
+        directory_entry.insert(0, last_directory)
     
     select_directory_button = ctk.CTkButton(directory_frame, text="Выбрать папку", command=select_directory_for_video, height=40, fg_color=Styles.COLOR_BUTTON)
     select_directory_button.pack(side='left')
@@ -219,7 +243,7 @@ def build_interface(window):
     canvas4.pack()
 
     try:
-        image4 = PhotoImage(file="videoeditor/icons/blur_bars.png").subsample(6, 6)
+        image4 = PhotoImage(file="videoeditor/icons/your_blur_bars.png").subsample(6, 6)
         canvas4.image = image4  # Сохраняем ссылку на изображение
         canvas4.create_image(50, 60, anchor='center', image=image4)  # Центрируем изображение
 
@@ -227,7 +251,7 @@ def build_interface(window):
             canvas4,
             text="",
             variable=selected,
-            value="blur_bars",
+            value="your_blur_bars",
             fg_color=Styles.COLOR_BUTTON,
             border_color=Styles.COLOR_BUTTON,
             hover_color=Styles.COLOR_BUTTON,
@@ -245,7 +269,7 @@ def build_interface(window):
     canvas5.pack()
 
     try:
-        image5 = PhotoImage(file="videoeditor/icons/line.png").subsample(6, 6)
+        image5 = PhotoImage(file="videoeditor/icons/youtube_loop.png").subsample(6, 6)
         canvas5.image = image5  # Сохраняем ссылку на изображение
         canvas5.create_image(50, 60, anchor='center', image=image5)  # Центрируем изображение
 
@@ -253,7 +277,7 @@ def build_interface(window):
             canvas5,
             text="",
             variable=selected,
-            value="line",
+            value="youTube_blur_bars",
             fg_color=Styles.COLOR_BUTTON,
             border_color=Styles.COLOR_BUTTON,
             hover_color=Styles.COLOR_BUTTON,
@@ -262,6 +286,30 @@ def build_interface(window):
     except Exception as e:
         print(f"Ошибка загрузки изображения: {e}")
 
+    # Фрейм для шестой радиокнопки и её изображения
+    radio_frame6 = tk.Frame(mode_frame, bg=Styles.BACKGROUND)
+    radio_frame6.pack(side='left', pady=(5, 0), padx=10)
+
+    canvas6 = tk.Canvas(radio_frame6, width=100, height=100, bg=Styles.BACKGROUND, highlightthickness=0)
+    canvas6.pack()
+
+    try:
+        image6 = PhotoImage(file="videoeditor/icons/line.png").subsample(6, 6)
+        canvas6.image = image6  # Сохраняем ссылку на изображение
+        canvas6.create_image(50, 60, anchor='center', image=image6)  # Центрируем изображение
+
+        radio6 = ctk.CTkRadioButton(
+            canvas6,
+            text="",
+            variable=selected,
+            value="line",
+            fg_color=Styles.COLOR_BUTTON,
+            border_color=Styles.COLOR_BUTTON,
+            hover_color=Styles.COLOR_BUTTON,
+        )
+        radio6.place(x=40, y=5)  # Размещаем радиокнопку по центру сверху
+    except Exception as e:
+        print(f"Ошибка загрузки изображения: {e}")
 
     info_of_processing_process = tk.Frame(frame, bg=Styles.BACKGROUND)
     info_of_processing_process.pack(fill="both", expand=True)

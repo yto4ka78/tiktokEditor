@@ -1,6 +1,6 @@
 import tkinter as tk
 from videoeditor.windows.main import build_interface
-from videoeditor.windows.variables import Styles
+from videoeditor.variables import Styles
 
 def main():
     window = tk.Tk()
